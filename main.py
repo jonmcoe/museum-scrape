@@ -1,7 +1,9 @@
 import argparse
 import datetime
-import requests
+import os
 from time import sleep
+
+import requests
 
 
 SEARCH_URL = "http://interactive.movingimage.us/pu.php"
@@ -12,6 +14,7 @@ DOWNLOAD_DICT = {
 	'file': 'saved/animation/{0}'
 }
 DEBUG_OUT_FREQUENCY = 1
+OUTPUT_DIRECTORY = 'output'
 
 # argparse stuff
 
@@ -27,13 +30,26 @@ def _contains_download(doc_text):
 
 
 def _fetch_and_save_movie(movie_filename):
-	print(movie_filename)
-	# request, local file write
-	return
+	print('Saving: ' + movie_filename)
+	if not os.path.exists(OUTPUT_DIRECTORY):
+		os.makedirs(OUTPUT_DIRECTORY)
+	movie_fetch_args = dict(DOWNLOAD_DICT)
+	movie_fetch_args['file'] = movie_fetch_args['file'].format(movie_filename)
+	try:
+		with open(OUTPUT_DIRECTORY + '/' + movie_filename, 'wb') as f:
+			res = requests.get(DOWNLOAD_URL, params=movie_fetch_args, stream=True)
+			if not res.ok:
+				raise Exception('fetch failed')
+			for block in res.iter_content(1024):
+				f.write(block)
+		print(movie_filename + ' saved successfully')
+	except Exception as e:
+		print e
+		print(movie_filename + ' save failed')
 
 
 def main():
-	START = datetime.datetime(year=2016, month=5, day=21, hour=18, minute=21, second=15)
+	START = datetime.datetime(year=2016, month=5, day=21, hour=18, minute=21, second=16)
 	END = datetime.datetime(year=2016, month=5, day=21, hour=18, minute=21, second=17)
 	INTERVAL = datetime.timedelta(seconds=1)
 
