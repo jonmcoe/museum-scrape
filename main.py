@@ -1,4 +1,5 @@
 import argparse
+import asyncio
 import datetime
 import logging
 import os
@@ -53,22 +54,36 @@ def _fetch_and_save_movie(movie_filename):
 		log.exception(movie_filename + ' save failed')
 
 
+async def attempt_file(movie_filename):
+	log.debug("attempt " + movie_filename)
+	asyncio.sleep(1)
+	log.debug("end " + movie_filename)
+	res = requests.get(SEARCH_URL, params={'f': movie_filename})
+	if res.status_code != requests.codes.ok:
+		log.info("Bad request for {0}: {1}".format(movie_filename, res.status_code))
+		return -1
+	elif _contains_download(res.text):
+		_fetch_and_save_movie(movie_filename)
+		return True
+	else:
+		return False
+
 def main():
 	START = datetime.datetime(year=2016, month=5, day=21, hour=18, minute=21, second=16)
 	END = datetime.datetime(year=2016, month=5, day=21, hour=18, minute=21, second=17)
 	INTERVAL = datetime.timedelta(seconds=1)
 
 	cur = START
+	loop = asyncio.get_event_loop()
 	while cur < END:
 		if cur.second % DEBUG_OUT_FREQUENCY == 0:
 			log.debug(cur)
-		for movie_filename in _make_second_block(cur):
-			res = requests.get(SEARCH_URL, params={'f': movie_filename})
-			if res.status_code != requests.codes.ok:
-				log.info("Bad request for {0}: {1}".format(movie_filename, res.status_code))
-				sleep(5)
-			if _contains_download(res.text):
-				_fetch_and_save_movie(movie_filename)
+		tasks = [
+			asyncio.ensure_future(attempt_file(movie_filename))
+			for movie_filename
+			in _make_second_block(cur)
+		]
+		loop.run_until_complete(tasks)
 		cur += INTERVAL
 
 
