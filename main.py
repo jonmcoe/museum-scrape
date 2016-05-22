@@ -1,6 +1,8 @@
 import argparse
 import datetime
+import logging
 import os
+import sys
 from time import sleep
 
 import requests
@@ -16,6 +18,10 @@ DOWNLOAD_DICT = {
 DEBUG_OUT_FREQUENCY = 1
 OUTPUT_DIRECTORY = 'output'
 
+logging.basicConfig(stream=sys.stdout, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
+
 # argparse stuff
 
 def _make_second_block(dt):
@@ -30,7 +36,7 @@ def _contains_download(doc_text):
 
 
 def _fetch_and_save_movie(movie_filename):
-	print('Saving: ' + movie_filename)
+	log.info('Saving: ' + movie_filename)
 	if not os.path.exists(OUTPUT_DIRECTORY):
 		os.makedirs(OUTPUT_DIRECTORY)
 	movie_fetch_args = dict(DOWNLOAD_DICT)
@@ -42,10 +48,9 @@ def _fetch_and_save_movie(movie_filename):
 				raise Exception('fetch failed')
 			for block in res.iter_content(1024):
 				f.write(block)
-		print(movie_filename + ' saved successfully')
+		log.info(movie_filename + ' saved successfully')
 	except Exception as e:
-		print e
-		print(movie_filename + ' save failed')
+		log.exception(movie_filename + ' save failed')
 
 
 def main():
@@ -56,11 +61,11 @@ def main():
 	cur = START
 	while cur < END:
 		if cur.second % DEBUG_OUT_FREQUENCY == 0:
-			print(cur)
+			log.debug(cur)
 		for movie_filename in _make_second_block(cur):
 			res = requests.get(SEARCH_URL, params={'f': movie_filename})
 			if res.status_code != requests.codes.ok:
-				print("Bad request for {0}: {1}".format(movie_filename, res.status_code))
+				log.info("Bad request for {0}: {1}".format(movie_filename, res.status_code))
 				sleep(5)
 			if _contains_download(res.text):
 				_fetch_and_save_movie(movie_filename)
