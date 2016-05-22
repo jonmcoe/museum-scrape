@@ -5,6 +5,7 @@ import os
 import sys
 from time import sleep
 
+import grequests
 import requests
 
 
@@ -54,21 +55,29 @@ def _fetch_and_save_movie(movie_filename):
 
 
 def main():
-	START = datetime.datetime(year=2016, month=5, day=21, hour=18, minute=21, second=16)
-	END = datetime.datetime(year=2016, month=5, day=21, hour=18, minute=21, second=17)
+	START = datetime.datetime(year=2016, month=5, day=21, hour=18, minute=10, second=5)
+	END = datetime.datetime(year=2016, month=5, day=21, hour=18, minute=30)
 	INTERVAL = datetime.timedelta(seconds=1)
+	BATCH_SIZE = 100 # must be a divisor of 1000
 
 	cur = START
 	while cur < END:
 		if cur.second % DEBUG_OUT_FREQUENCY == 0:
 			log.debug(cur)
-		for movie_filename in _make_second_block(cur):
-			res = requests.get(SEARCH_URL, params={'f': movie_filename})
-			if res.status_code != requests.codes.ok:
+		second_block = _make_second_block(cur)
+		for i in range(int(len(second_block) / BATCH_SIZE)):
+			f_values = second_block[i*BATCH_SIZE:(i+1)*BATCH_SIZE]
+			req_ready = (grequests.get(SEARCH_URL, params={'f': f_val}) for f_val in f_values)
+			res_list = list(zip(list(grequests.map(req_ready)), f_values))
+			log.debug(len(res_list))
+			log.debug("Fastest request: {}".format(min([res.elapsed for res, _ in res_list])))
+			log.debug("Slowest request: {}".format(max([res.elapsed for res, _ in res_list])))
+			log.debug(res_list[-1])
+			if any([res.status_code != requests.codes.ok for res, _ in res_list]):
 				log.info("Bad request for {0}: {1}".format(movie_filename, res.status_code))
 				sleep(5)
-			if _contains_download(res.text):
-				_fetch_and_save_movie(movie_filename)
+			for movie_found in [movie_filename for res, movie_filename in res_list if _contains_download(res.text)]:
+				_fetch_and_save_movie(movie_found)
 		cur += INTERVAL
 
 
